@@ -14,6 +14,6 @@ class CupertinoTabBarViewFactory: NSObject, FlutterPlatformViewFactory {
   }
 
   func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
-    return CupertinoTabBarPlatformView(frame: frame, viewId: viewId, args: args, messenger: messenger)
+    return CupertinoTabBarPlatformView(frame: frame, viewId: viewId, args: args, messenger: messenger, registrar: nil)
   }
 }

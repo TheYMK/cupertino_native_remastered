@@ -4,6 +4,7 @@ import 'demos/slider.dart';
 import 'demos/switch.dart';
 import 'demos/segmented_control.dart';
 import 'demos/tab_bar.dart';
+import 'demos/tab_bar_custom_icons.dart';
 import 'demos/icon.dart';
 import 'demos/popup_menu_button.dart';
 import 'demos/button.dart';
@@ -204,7 +205,7 @@ class HomePage extends StatelessWidget {
             header: Text('Navigation'),
             children: [
               CupertinoListTile(
-                title: Text('Tab Bar'),
+                title: Text('Tab Bar (SF Symbols)'),
                 leading: CNIcon(
                   symbol: CNSymbol('square.grid.2x2', color: accentColor),
                 ),
@@ -212,6 +213,51 @@ class HomePage extends StatelessWidget {
                 onTap: () {
                   Navigator.of(context).push(
                     CupertinoPageRoute(builder: (_) => const TabBarDemoPage()),
+                  );
+                },
+              ),
+              CupertinoListTile(
+                title: Text('Tab Bar (Custom Icons)'),
+                subtitle: Text('Using Flutter IconData'),
+                leading: CNIcon(
+                  symbol: CNSymbol('star.fill', color: accentColor),
+                ),
+                trailing: CupertinoListTileChevron(),
+                onTap: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder: (_) => const TabBarCustomIconsDemoPage(),
+                    ),
+                  );
+                },
+              ),
+              CupertinoListTile(
+                title: Text('Tab Bar (Mixed Icons)'),
+                subtitle: Text('SF Symbols + Flutter Icons'),
+                leading: CNIcon(
+                  symbol: CNSymbol('sparkles', color: accentColor),
+                ),
+                trailing: CupertinoListTileChevron(),
+                onTap: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder: (_) => const TabBarMixedIconsDemoPage(),
+                    ),
+                  );
+                },
+              ),
+              CupertinoListTile(
+                title: Text('Tab Bar (Third-Party Icons)'),
+                subtitle: Text('Islamic Icons + Custom Font'),
+                leading: CNIcon(
+                  symbol: CNSymbol('book.fill', color: accentColor),
+                ),
+                trailing: CupertinoListTileChevron(),
+                onTap: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder: (_) => const TabBarThirdPartyIconsDemoPage(),
+                    ),
                   );
                 },
               ),

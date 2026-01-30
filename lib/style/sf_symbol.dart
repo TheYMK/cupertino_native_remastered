@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
+import 'tab_bar_icon.dart';
+
 /// Rendering modes for SF Symbols.
 enum CNSymbolRenderingMode {
   /// Single-color glyph.
@@ -16,7 +18,7 @@ enum CNSymbolRenderingMode {
 }
 
 /// Describes an SF Symbol to render natively.
-class CNSymbol {
+class CNSymbol extends CNTabBarIcon {
   /// The SF Symbol name, e.g. `chevron.down`.
   final String name;
 
@@ -40,4 +42,7 @@ class CNSymbol {
     this.mode,
     this.gradient,
   });
+
+  @override
+  bool get isSFSymbol => true;
 }

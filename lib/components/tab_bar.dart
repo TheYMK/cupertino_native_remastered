@@ -4,17 +4,39 @@ import 'package:flutter/services.dart';
 
 import '../channel/params.dart';
 import '../style/sf_symbol.dart';
+import '../style/tab_bar_icon.dart';
 
 /// Immutable data describing a single tab bar item.
 class CNTabBarItem {
   /// Creates a tab bar item description.
+  ///
+  /// The [icon] parameter accepts either a [CNSymbol] for SF Symbols (native
+  /// iOS/macOS symbols) or a [CNCustomIcon] for Flutter [IconData]-based icons.
+  ///
+  /// Example with SF Symbol:
+  /// ```dart
+  /// CNTabBarItem(
+  ///   label: 'Home',
+  ///   icon: CNSymbol('house.fill'),
+  /// )
+  /// ```
+  ///
+  /// Example with Flutter IconData:
+  /// ```dart
+  /// CNTabBarItem(
+  ///   label: 'Home',
+  ///   icon: CNCustomIcon(Icons.home),
+  /// )
+  /// ```
   const CNTabBarItem({this.label, this.icon});
 
   /// Optional tab item label.
   final String? label;
 
-  /// Optional SF Symbol for the item.
-  final CNSymbol? icon;
+  /// Optional icon for the item.
+  ///
+  /// Can be either a [CNSymbol] (SF Symbol) or [CNCustomIcon] (Flutter IconData).
+  final CNTabBarIcon? icon;
 }
 
 /// A Cupertino-native tab bar. Uses native UITabBar/NSTabView style visuals.
@@ -80,7 +102,7 @@ class _CNTabBarState extends State<CNTabBar> {
   double? _intrinsicHeight;
   double? _intrinsicWidth;
   List<String>? _lastLabels;
-  List<String>? _lastSymbols;
+  String? _lastIconsFingerprint;
   bool? _lastSplit;
   int? _lastRightCount;
   double? _lastSplitSpacing;
@@ -88,6 +110,76 @@ class _CNTabBarState extends State<CNTabBar> {
   bool get _isDark => CupertinoTheme.of(context).brightness == Brightness.dark;
   Color? get _effectiveTint =>
       widget.tint ?? CupertinoTheme.of(context).primaryColor;
+
+  /// Builds icon parameters for native communication (synchronous, no image data).
+  ///
+  /// Handles both SF Symbols and custom Flutter IconData icons.
+  /// For custom icons, only metadata is included; image data is sent separately.
+  Map<String, dynamic> _buildIconParamsSync(BuildContext context) {
+    final symbols = <String>[];
+    final sizes = <double?>[];
+    final colors = <int?>[];
+    final hasCustomIcon = <bool>[];
+
+    for (final item in widget.items) {
+      final icon = item.icon;
+      if (icon == null) {
+        symbols.add('');
+        sizes.add(widget.iconSize);
+        colors.add(null);
+        hasCustomIcon.add(false);
+      } else if (icon is CNSymbol) {
+        symbols.add(icon.name);
+        sizes.add(widget.iconSize ?? icon.size);
+        colors.add(resolveColorToArgb(icon.color, context));
+        hasCustomIcon.add(false);
+      } else if (icon is CNCustomIcon) {
+        symbols.add(''); // No SF Symbol
+        sizes.add(widget.iconSize ?? icon.size);
+        colors.add(resolveColorToArgb(icon.color, context));
+        hasCustomIcon.add(true);
+      }
+    }
+
+    return {
+      'sfSymbols': symbols,
+      'sfSymbolSizes': sizes,
+      'sfSymbolColors': colors,
+      'hasCustomIcon': hasCustomIcon,
+    };
+  }
+
+  /// Renders custom icons to PNG and returns the data for native.
+  Future<List<Uint8List?>> _renderCustomIconImages() async {
+    final images = <Uint8List?>[];
+    for (final item in widget.items) {
+      final icon = item.icon;
+      if (icon is CNCustomIcon) {
+        // Render at 2x scale for retina displays
+        final bytes = await icon.renderToImageBytes(scale: 2.0);
+        images.add(bytes);
+      } else {
+        images.add(null);
+      }
+    }
+    return images;
+  }
+
+  /// Gets a string representation of icons for comparison.
+  String _getIconsFingerprint() {
+    final parts = <String>[];
+    for (final item in widget.items) {
+      final icon = item.icon;
+      if (icon == null) {
+        parts.add('null');
+      } else if (icon is CNSymbol) {
+        parts.add('sf:${icon.name}');
+      } else if (icon is CNCustomIcon) {
+        parts.add('custom:${icon.codePoint}:${icon.fontFamily}:${icon.fontPackage}');
+      }
+    }
+    return parts.join('|');
+  }
 
   @override
   void didUpdateWidget(covariant CNTabBar oldWidget) {
@@ -126,19 +218,11 @@ class _CNTabBarState extends State<CNTabBar> {
     }
 
     final labels = widget.items.map((e) => e.label ?? '').toList();
-    final symbols = widget.items.map((e) => e.icon?.name ?? '').toList();
-    final sizes = widget.items
-        .map((e) => (widget.iconSize ?? e.icon?.size))
-        .toList();
-    final colors = widget.items
-        .map((e) => resolveColorToArgb(e.icon?.color, context))
-        .toList();
+    final iconParams = _buildIconParamsSync(context);
 
     final creationParams = <String, dynamic>{
       'labels': labels,
-      'sfSymbols': symbols,
-      'sfSymbolSizes': sizes,
-      'sfSymbolColors': colors,
+      ...iconParams,
       'selectedIndex': widget.currentIndex,
       'isDark': _isDark,
       'split': widget.split,
@@ -190,6 +274,23 @@ class _CNTabBarState extends State<CNTabBar> {
     _lastSplit = widget.split;
     _lastRightCount = widget.rightCount;
     _lastSplitSpacing = widget.splitSpacing;
+    // Send custom icon images if any
+    _sendCustomIconImages();
+  }
+
+  /// Renders and sends custom icon images to native.
+  Future<void> _sendCustomIconImages() async {
+    final ch = _channel;
+    if (ch == null) return;
+
+    // Check if there are any custom icons
+    final hasCustom = widget.items.any((item) => item.icon is CNCustomIcon);
+    if (!hasCustom) return;
+
+    final images = await _renderCustomIconImages();
+    if (!mounted) return;
+
+    await ch.invokeMethod('setCustomIconImages', {'images': images});
   }
 
   Future<dynamic> _onMethodCall(MethodCall call) async {
@@ -231,16 +332,19 @@ class _CNTabBarState extends State<CNTabBar> {
 
     // Items update (for hot reload or dynamic changes)
     final labels = widget.items.map((e) => e.label ?? '').toList();
-    final symbols = widget.items.map((e) => e.icon?.name ?? '').toList();
+    final iconsFingerprint = _getIconsFingerprint();
     if (_lastLabels?.join('|') != labels.join('|') ||
-        _lastSymbols?.join('|') != symbols.join('|')) {
+        _lastIconsFingerprint != iconsFingerprint) {
+      final iconParams = _buildIconParamsSync(context);
       await ch.invokeMethod('setItems', {
         'labels': labels,
-        'sfSymbols': symbols,
+        ...iconParams,
         'selectedIndex': widget.currentIndex,
       });
       _lastLabels = labels;
-      _lastSymbols = symbols;
+      _lastIconsFingerprint = iconsFingerprint;
+      // Send custom icon images if any
+      _sendCustomIconImages();
       // Re-measure width in case content changed
       _requestIntrinsicSize();
     }
@@ -281,7 +385,7 @@ class _CNTabBarState extends State<CNTabBar> {
 
   void _cacheItems() {
     _lastLabels = widget.items.map((e) => e.label ?? '').toList();
-    _lastSymbols = widget.items.map((e) => e.icon?.name ?? '').toList();
+    _lastIconsFingerprint = _getIconsFingerprint();
   }
 
   Future<void> _requestIntrinsicSize() async {

@@ -9,6 +9,7 @@ export 'components/icon.dart';
 export 'components/tab_bar.dart';
 export 'components/popup_menu_button.dart';
 export 'style/sf_symbol.dart';
+export 'style/tab_bar_icon.dart';
 export 'style/button_style.dart';
 export 'components/button.dart';
 
